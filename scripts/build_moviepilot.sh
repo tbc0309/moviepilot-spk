@@ -71,7 +71,14 @@ docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux2014_${r
   /opt/python/cp314-cp314/bin/python -m pip install --disable-pip-version-check uv
   /opt/python/cp314-cp314/bin/python -m uv lock --upgrade-package numpy==2.4.2
   UV_PROJECT_ENVIRONMENT=/work/venv /opt/python/cp314-cp314/bin/python -m uv sync \
-    --locked --no-default-groups --group runtime-standard --no-install-project
+    --locked --no-default-groups --group runtime-standard --no-install-project \
+    --no-install-package psycopg2-binary
+  mkdir -p /tmp/psycopg-wheel /tmp/psycopg-repaired
+  /opt/python/cp314-cp314/bin/python -m pip wheel --no-deps \
+    --wheel-dir /tmp/psycopg-wheel psycopg2-binary==2.9.12
+  auditwheel repair --wheel-dir /tmp/psycopg-repaired /tmp/psycopg-wheel/psycopg2_binary-*.whl
+  /opt/python/cp314-cp314/bin/python -m uv pip install \
+    --python /work/venv/bin/python /tmp/psycopg-repaired/psycopg2_binary-*.whl
   /work/venv/bin/python /work/source/app/doctor/dependencies.py --full
   /opt/python/cp314-cp314/bin/python -m uv pip install \
     --python /work/venv/bin/python --no-cache supervisor==4.3.0
