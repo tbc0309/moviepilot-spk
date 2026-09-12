@@ -3,7 +3,7 @@ set -Eeuo pipefail
 version="${1:?version required}"; arch="${2:?arch required}"
 repo="${GITHUB_WORKSPACE:-$(cd "$(dirname "$0")/.." && pwd)}"; work="$(mktemp -d)"
 payload="${work}/payload"; outer="${work}/outer"; mkdir -p "$payload" "$outer" "$repo/dist/$arch"
-trap 'rm -rf "$work"' EXIT
+trap 'sudo rm -rf "$work"' EXIT
 
 resolve_commit() {
   gh api "repos/$1/commits/$2" --jq .sha | grep -E '^[0-9a-f]{40}$'
@@ -65,6 +65,8 @@ find "$payload/moviepilot/app/plugins" -mindepth 1 -maxdepth 1 -type d -printf '
   | LC_ALL=C sort > "$payload/moviepilot/app/plugins/.spk-bundled-plugins"
 
 docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux2014_${resource_arch}:latest" bash -euxc '
+  curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+  source /root/.cargo/env
   /opt/python/cp314-cp314/bin/python -m pip install --disable-pip-version-check uv
   UV_PROJECT_ENVIRONMENT=/work/venv /opt/python/cp314-cp314/bin/python -m uv sync \
     --locked --no-default-groups --group runtime-standard --no-install-project
