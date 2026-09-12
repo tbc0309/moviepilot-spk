@@ -4,51 +4,114 @@ version="${1:?version required}"; arch="${2:?arch required}"
 repo="${GITHUB_WORKSPACE:-$(cd "$(dirname "$0")/.." && pwd)}"; work="$(mktemp -d)"
 payload="${work}/payload"; outer="${work}/outer"; mkdir -p "$payload" "$outer" "$repo/dist/$arch"
 trap 'rm -rf "$work"' EXIT
+
+resolve_commit() {
+  gh api "repos/$1/commits/$2" --jq .sha | grep -E '^[0-9a-f]{40}$'
+}
+
+download_release_asset() {
+  local project="$1" tag="$2" asset="$3" output="$4" url digest actual
+  IFS=$'\t' read -r url digest < <(
+    gh api "repos/${project}/releases/tags/${tag}" \
+      --jq ".assets[] | select(.name == \"${asset}\") | [.browser_download_url, .digest] | @tsv"
+  )
+  [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Missing SHA-256 digest for ${project}/${tag}/${asset}" >&2; exit 1; }
+  curl -fsSL "$url" -o "$output"
+  actual="$(sha256sum "$output" | cut -d ' ' -f1)"
+  [[ "sha256:${actual}" == "$digest" ]] || { echo "Digest mismatch for ${asset}" >&2; exit 1; }
+}
+
 cp -a "$repo/packages/moviepilot/payload/." "$payload/"
 cp -a "$repo/packages/moviepilot/outer/." "$outer/"
 mkdir -p "$payload/logs" "$payload/tmp"
 
-curl -fsSL "https://github.com/jxxghp/MoviePilot/archive/refs/tags/v${version}.tar.gz" -o "$work/source.tgz"
+source_commit="$(resolve_commit jxxghp/MoviePilot "v${version}")"
+plugins_commit="$(resolve_commit jxxghp/MoviePilot-Plugins main)"
+resources_commit="$(resolve_commit jxxghp/MoviePilot-Resources main)"
+curl -fsSL "https://codeload.github.com/jxxghp/MoviePilot/tar.gz/${source_commit}" -o "$work/source.tgz"
 mkdir "$work/source"; tar -xzf "$work/source.tgz" -C "$work/source" --strip-components=1
 cp -a "$work/source/." "$payload/moviepilot/"; cp -a "$work/source/config" "$payload/config"
 frontend="$(sed -n "s/^FRONTEND_VERSION[[:space:]]*=[[:space:]]*['\"]\([^'\"]*\)['\"].*/\1/p" "$work/source/version.py")"
 test -n "$frontend"
-curl -fsSL "https://github.com/jxxghp/MoviePilot-Frontend/releases/download/${frontend}/dist.zip" -o "$work/dist.zip"
+download_release_asset jxxghp/MoviePilot-Frontend "$frontend" dist.zip "$work/dist.zip"
 unzip -q "$work/dist.zip" -d "$work/frontend"; mkdir -p "$payload/public"; cp -a "$work/frontend/dist/." "$payload/public/"
 (cd "$payload/public" && npm init -y >/dev/null && npm pkg set 'overrides.qs=6.16.0' && npm install --omit=dev --ignore-scripts --no-fund express@4.22.2 express-http-proxy@2.1.2 && npm audit --omit=dev --audit-level=moderate)
 
-curl -fsSL https://github.com/jxxghp/MoviePilot-Resources/archive/refs/heads/main.tar.gz -o "$work/resources.tgz"
+curl -fsSL "https://codeload.github.com/jxxghp/MoviePilot-Resources/tar.gz/${resources_commit}" -o "$work/resources.tgz"
 mkdir "$work/resources"; tar -xzf "$work/resources.tgz" -C "$work/resources" --strip-components=1
-site="$payload/moviepilot/app/application/site"; mkdir -p "$site"; cp "$work/resources/resources.v3/user.sites.v3.bin" "$site/"
+site="$payload/moviepilot/app/application/site"; mkdir -p "$site"
 if [ "$arch" = armv8 ]; then resource_arch=aarch64; else resource_arch=x86_64; fi
-find "$work/resources/resources.v3" -maxdepth 1 -type f \( -name "sites.cpython-314-${resource_arch}-linux-gnu.so" -o -name "sites.cpython-314t-${resource_arch}-linux-gnu.so" -o -name sites.pyi \) -exec cp '{}' "$site/" ';'
+resource_dir="$work/resources/resources.v3"
+site_so="sites.cpython-314-${resource_arch}-linux-gnu.so"
+site_so_t="sites.cpython-314t-${resource_arch}-linux-gnu.so"
+for required in user.sites.v3.bin sites.pyi "$site_so" "$site_so_t"; do
+  test -s "$resource_dir/$required" || { echo "Missing required site resource: $required" >&2; exit 1; }
+done
+rm -f "$site"/sites*.so
+install -m 0644 "$resource_dir/user.sites.v3.bin" "$resource_dir/sites.pyi" \
+  "$resource_dir/$site_so" "$resource_dir/$site_so_t" "$site/"
+if [ "$resource_arch" = aarch64 ]; then elf_machine='AArch64'; else elf_machine='Advanced Micro Devices X86-64'; fi
+for module in "$site/$site_so" "$site/$site_so_t"; do
+  readelf -h "$module" | grep -Fq "$elf_machine" || { echo "Wrong ELF architecture: $module" >&2; exit 1; }
+done
 
-curl -fsSL https://github.com/jxxghp/MoviePilot-Plugins/archive/refs/heads/main.tar.gz -o "$work/plugins.tgz"
+curl -fsSL "https://codeload.github.com/jxxghp/MoviePilot-Plugins/tar.gz/${plugins_commit}" -o "$work/plugins.tgz"
 mkdir "$work/plugins"; tar -xzf "$work/plugins.tgz" -C "$work/plugins" --strip-components=1
 test -d "$work/plugins/plugins.v3"
 mkdir -p "$payload/moviepilot/app/plugins"
 cp -a "$work/plugins/plugins.v3/." "$payload/moviepilot/app/plugins/"
+find "$payload/moviepilot/app/plugins" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' \
+  | LC_ALL=C sort > "$payload/moviepilot/app/plugins/.spk-bundled-plugins"
 
 docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux_2_28_${resource_arch}:latest" bash -euxc '
   /opt/python/cp314-cp314/bin/python -m pip install --disable-pip-version-check uv
   UV_PROJECT_ENVIRONMENT=/work/venv /opt/python/cp314-cp314/bin/python -m uv sync \
-    --locked --no-dev --no-install-project --group runtime-standard
+    --locked --no-default-groups --group runtime-standard --no-install-project
+  /work/venv/bin/python /work/source/app/doctor/dependencies.py --full
   /opt/python/cp314-cp314/bin/python -m uv pip install \
     --python /work/venv/bin/python --no-cache supervisor==4.3.0
+  /work/venv/bin/python -c "import supervisor; import uvicorn; import fastapi"
 '
 sudo chown -R "$(id -u):$(id -g)" "$work"
 cp -a "$work/venv/." "$payload/"
+
+# Keep runtime files while dropping repository-only material from the installed app.
+rm -rf "$payload/moviepilot/.github" "$payload/moviepilot/docs" \
+  "$payload/moviepilot/tests" "$payload/moviepilot/skills" "$payload/moviepilot/docker"
+rm -f "$payload/moviepilot/.dockerignore" "$payload/moviepilot/.gitattributes" \
+  "$payload/moviepilot/.gitignore" "$payload/moviepilot/.pylintrc" \
+  "$payload/moviepilot/AGENTS.md" "$payload/moviepilot/README"*
 find "$payload" -type d -name __pycache__ -prune -exec rm -rf '{}' +
 find "$payload" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
-rm -f "$payload/.gitignore" "$payload/bin/Activate.ps1" "$payload/bin/activate" \
-  "$payload/bin/activate.csh" "$payload/bin/activate.fish" "$payload/bin/pip" \
-  "$payload/bin/pip3" "$payload/bin/pip3.14" "$payload/bin/𝜋thon"
+rm -f "$payload/.gitignore" "$payload/.lock" "$payload/CACHEDIR.TAG" \
+  "$payload/bin/Activate.ps1" "$payload/bin/activate" "$payload/bin/activate.csh" \
+  "$payload/bin/activate.fish" "$payload/bin/deactivate.bat" "$payload/bin/pip" \
+  "$payload/bin/pip3" "$payload/bin/pip3.14" "$payload/bin/𝜋thon" \
+  "$payload/lib/python3.14/site-packages/_virtualenv.pth" \
+  "$payload/lib/python3.14/site-packages/_virtualenv.py"
 rm -rf "$payload/lib/python3.14/site-packages/pip" \
   "$payload"/lib/python3.14/site-packages/pip-*.dist-info
 rm -f "$payload/bin/python" "$payload/bin/python3" "$payload/bin/python3.14"
 ln -s /usr/local/bin/python3.14 "$payload/bin/python3.14"; ln -s python3.14 "$payload/bin/python3"; ln -s python3.14 "$payload/bin/python"
-curl -fsSL "https://github.com/astral-sh/uv/releases/latest/download/uv-${resource_arch}-unknown-linux-gnu.tar.gz" -o "$work/uv.tgz"
+uv_version="0.12.13"
+if [ "$resource_arch" = aarch64 ]; then
+  uv_sha256="2eaa5d94f5db7b3a1a092156b9420459e42ab0217d917fe74a876309cef9b5e9"
+else
+  uv_sha256="745765a3b6e360ad76743599ae5c42e9278c7edf8bbff9fc76d05bf2623a04dd"
+fi
+curl -fsSL "https://github.com/astral-sh/uv/releases/download/${uv_version}/uv-${resource_arch}-unknown-linux-gnu.tar.gz" -o "$work/uv.tgz"
+echo "${uv_sha256}  $work/uv.tgz" | sha256sum -c -
 tar -xzf "$work/uv.tgz" -C "$work"; install -m 0755 "$work/uv-${resource_arch}-unknown-linux-gnu/uv" "$payload/bin/uv"; ln -sf uv "$payload/bin/uvx"
+
+cat > "$payload/BUILD-METADATA" <<EOF
+MoviePilot.version=${version}
+MoviePilot.commit=${source_commit}
+MoviePilot-Frontend.version=${frontend}
+MoviePilot-Plugins.branch=v3
+MoviePilot-Plugins.commit=${plugins_commit}
+MoviePilot-Resources.commit=${resources_commit}
+uv.version=${uv_version}
+EOF
 
 python3 - "$outer/INFO" "$version" "$arch" <<'PY'
 import re, sys

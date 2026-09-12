@@ -8,7 +8,8 @@ if [ -z "${SYNOPKG_PKGNAME}" ] || [ -z "${SYNOPKG_DSM_VERSION_MAJOR}" ]; then
 fi
 
 PACKAGE_BASE="/var/packages/${SYNOPKG_PKGNAME}/target"
-CONFIG_FILE="${PACKAGE_BASE}/config/app.env"
+USER="MoviePilot"
+EFF_USER="sc-MoviePilot"
 SVC_CWD="${PACKAGE_BASE}"
 export PATH="$PATH:${PACKAGE_BASE}/bin:/var/packages/Node.js_v22/target/usr/local/bin"
 export UV_BIN="${PACKAGE_BASE}/bin/uv"
@@ -20,6 +21,7 @@ export TMP="${PACKAGE_BASE}/tmp"
 export NGINX_PORT="13000"
 export PORT="13001"
 export MOVIEPILOT_AUTO_UPDATE="false"
+export HOST="127.0.0.1"
 
 # start-stop-status script redirect stdout/stderr to LOG_FILE
 LOG_FILE="${PACKAGE_BASE}/logs/${SYNOPKG_PKGNAME}.log"
@@ -30,16 +32,37 @@ PID_FILE="${SYNOPKG_PKGVAR}/${SYNOPKG_PKGNAME}.pid"
 ### Package specific variables and functions
 ### ----------------------------------------
 
-SERVICE_COMMAND[0]="${PACKAGE_BASE}/bin/supervisord -n -c ${PACKAGE_BASE}/supervisord.conf"
+SERVICE_COMMAND="${PACKAGE_BASE}/bin/supervisord -n -c ${PACKAGE_BASE}/supervisord.conf"
 SVC_BACKGROUND=y
 SVC_WRITE_PID=y
 
 service_preupgrade() {
-    $CP "${PACKAGE_BASE}/moviepilot/app/plugins" "${SYNOPKG_PKGVAR}/"
+    backup="${SYNOPKG_PKGVAR}/plugin-upgrade-backup"
+    $RM "${backup}"
+    if [ -d "${PACKAGE_BASE}/moviepilot/app/plugins" ]; then
+        mkdir -p "${backup}"
+        cp -a "${PACKAGE_BASE}/moviepilot/app/plugins/." "${backup}/"
+    fi
 }
 
 service_postupgrade() {
-    $CP "${PACKAGE_BASE}/moviepilot/app/plugins" "${SYNOPKG_PKGVAR}/"
-    $CP "${SYNOPKG_PKGVAR}/plugins" "${PACKAGE_BASE}/moviepilot/app/"
-    $RM "${SYNOPKG_PKGVAR}/plugins"
+    backup="${SYNOPKG_PKGVAR}/plugin-upgrade-backup"
+    plugins="${PACKAGE_BASE}/moviepilot/app/plugins"
+    old_manifest="${backup}/.spk-bundled-plugins"
+    new_manifest="${plugins}/.spk-bundled-plugins"
+
+    # The new package keeps a clean copy of all bundled V3 plugins. Restore only
+    # user-installed plugin directories so old bundled files cannot mix with new ones.
+    if [ -d "${backup}" ]; then
+        for plugin in "${backup}"/*; do
+            [ -d "${plugin}" ] || continue
+            plugin_name=$(basename "${plugin}")
+            if { [ -f "${old_manifest}" ] && grep -Fxq "${plugin_name}" "${old_manifest}"; } || \
+               { [ -f "${new_manifest}" ] && grep -Fxq "${plugin_name}" "${new_manifest}"; }; then
+                continue
+            fi
+            cp -a "${plugin}" "${plugins}/"
+        done
+        $RM "${backup}"
+    fi
 }

@@ -55,6 +55,8 @@ jobs:
         with:
           node-version: '22'
       - name: Build MoviePilot
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/build_moviepilot.sh "${{ needs.resolve.outputs.version }}" "${{ matrix.arch }}"
       - uses: actions/upload-artifact@v4
         with:
