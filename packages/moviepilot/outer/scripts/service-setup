@@ -36,7 +36,30 @@ SERVICE_COMMAND="${PACKAGE_BASE}/bin/supervisord -n -c ${PACKAGE_BASE}/superviso
 SVC_BACKGROUND=y
 SVC_WRITE_PID=y
 
+link_config_folder() {
+    persistent_config="${SYNOPKG_PKGVAR}/config"
+    package_config="${PACKAGE_BASE}/config"
+
+    # Keep user configuration under @appdata and expose the historical target/config path.
+    # Package defaults are copied only when the corresponding persistent file is absent.
+    if [ -L "${persistent_config}" ]; then
+        echo "Refusing symbolic link at ${persistent_config}" 1>&2
+        return 1
+    fi
+    $MKDIR "${persistent_config}"
+    if [ -d "${package_config}" ] && [ ! -L "${package_config}" ]; then
+        $RSYNC --ignore-existing "${package_config}/" "${persistent_config}/"
+    fi
+    $RM "${package_config}"
+    $LN "${persistent_config}" "${package_config}"
+}
+
+service_postinst() {
+    link_config_folder
+}
+
 service_preupgrade() {
+    link_config_folder || return 1
     backup="${SYNOPKG_PKGVAR}/plugin-upgrade-backup"
     $RM "${backup}"
     if [ -d "${PACKAGE_BASE}/moviepilot/app/plugins" ]; then
@@ -50,6 +73,8 @@ service_postupgrade() {
     plugins="${PACKAGE_BASE}/moviepilot/app/plugins"
     old_manifest="${backup}/.spk-bundled-plugins"
     new_manifest="${plugins}/.spk-bundled-plugins"
+
+    link_config_folder || return 1
 
     # The new package keeps a clean copy of all bundled V3 plugins. Restore only
     # user-installed plugin directories so old bundled files cannot mix with new ones.
