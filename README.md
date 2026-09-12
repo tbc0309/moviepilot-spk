@@ -1,6 +1,6 @@
-# Synology SPK Auto Builder
+# MoviePilot Synology SPK Builder
 
-私有的群晖套件自动更新框架。仓库只保存打包规则和套件空壳，不保存上游项目源码。
+MoviePilot 群晖套件的自动更新与构建项目。仓库只保存 MoviePilot 打包规则和套件空壳，不保存上游项目源码。
 
 ## 工作方式
 
@@ -10,7 +10,7 @@
 - 构建成功后创建 GitHub Release，并附带 SPK 与 SHA256 文件。
 - 已发布的版本不会重复构建。
 
-目前启用：`jxxghp/MoviePilot`。以后在 `packages.json` 增加项目即可。
+上游项目：`jxxghp/MoviePilot`。
 
 ## 构建节点
 

@@ -20,7 +20,6 @@ export TMP="${PACKAGE_BASE}/tmp"
 export NGINX_PORT="13000"
 export PORT="13001"
 export MOVIEPILOT_AUTO_UPDATE="false"
-export SUPERUSER_PASSWORD=admin
 
 # start-stop-status script redirect stdout/stderr to LOG_FILE
 LOG_FILE="${PACKAGE_BASE}/logs/${SYNOPKG_PKGNAME}.log"

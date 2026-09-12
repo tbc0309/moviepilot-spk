@@ -1,4 +1,4 @@
-name: Monitor upstream releases
+name: Monitor MoviePilot releases
 
 on:
   schedule:
@@ -38,4 +38,3 @@ jobs:
           --repo "${GITHUB_REPOSITORY}"
           -f package="${{ matrix.package }}"
           -f version="${{ matrix.version }}"
-
