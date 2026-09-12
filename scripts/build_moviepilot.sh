@@ -6,6 +6,7 @@ payload="${work}/payload"; outer="${work}/outer"; mkdir -p "$payload" "$outer" "
 trap 'rm -rf "$work"' EXIT
 cp -a "$repo/packages/moviepilot/payload/." "$payload/"
 cp -a "$repo/packages/moviepilot/outer/." "$outer/"
+mkdir -p "$payload/logs" "$payload/tmp"
 
 curl -fsSL "https://github.com/jxxghp/MoviePilot/archive/refs/tags/v${version}.tar.gz" -o "$work/source.tgz"
 mkdir "$work/source"; tar -xzf "$work/source.tgz" -C "$work/source" --strip-components=1
@@ -71,6 +72,12 @@ if tar -tf "$outer/package.tgz" | grep -Eq '^(\./|\.$)'; then
   echo "package.tgz contains an invalid dot-prefixed root" >&2
   exit 1
 fi
+for required_dir in logs/ tmp/; do
+  if ! tar -tf "$outer/package.tgz" | grep -qx "${required_dir}"; then
+    echo "package.tgz is missing required directory: ${required_dir}" >&2
+    exit 1
+  fi
+done
 if tar -tf "$output" | grep -Eq '^(\./|\.$)'; then
   echo "SPK contains an invalid dot-prefixed root" >&2
   exit 1
