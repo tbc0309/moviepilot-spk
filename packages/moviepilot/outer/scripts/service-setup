@@ -31,7 +31,7 @@ PID_FILE="${SYNOPKG_PKGVAR}/${SYNOPKG_PKGNAME}.pid"
 ### Package specific variables and functions
 ### ----------------------------------------
 
-SERVICE_COMMAND="${SYNOPKG_PKGDEST}/bin/supervisord -n -c ${SYNOPKG_PKGDEST}/supervisord.conf"
+SERVICE_COMMAND="${SYNOPKG_PKGDEST}/bin/python -m supervisor.supervisord -n -c ${SYNOPKG_PKGDEST}/supervisord.conf"
 SVC_BACKGROUND=y
 SVC_WRITE_PID=y
 

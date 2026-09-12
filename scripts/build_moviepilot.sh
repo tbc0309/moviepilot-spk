@@ -94,6 +94,28 @@ rm -rf "$payload/lib/python3.14/site-packages/pip" \
   "$payload"/lib/python3.14/site-packages/pip-*.dist-info
 rm -f "$payload/bin/python" "$payload/bin/python3" "$payload/bin/python3.14"
 ln -s /usr/local/bin/python3.14 "$payload/bin/python3.14"; ln -s python3.14 "$payload/bin/python3"; ln -s python3.14 "$payload/bin/python"
+
+# uv creates console entry points with the temporary build path in their shebang.
+# Normalize every affected entry point to the stable Synology package symlink.
+while IFS= read -r -d '' entrypoint; do
+  sed -i '1s|^#!/work/venv/bin/python.*$|#!/var/packages/MoviePilot/target/bin/python|' "$entrypoint"
+done < <(grep -IlZ '^#!/work/venv/bin/python' "$payload/bin"/* 2>/dev/null || true)
+if grep -IRn '/work/venv' "$payload/bin"; then
+  echo "Temporary build path remains in a packaged command entry point" >&2
+  exit 1
+fi
+
+# Match the static FFmpeg payload pinned by the official MoviePilot V3 image.
+ffmpeg_version="8.1.1"
+ffmpeg_image="mwader/static-ffmpeg:${ffmpeg_version}@sha256:735f84b905e00d5c618b667f0b053f83b1096f5fc404c607e6134bf2275a0e0a"
+ffmpeg_container="$(docker create "$ffmpeg_image")"
+docker cp "${ffmpeg_container}:/ffmpeg" "$payload/bin/ffmpeg"
+docker cp "${ffmpeg_container}:/ffprobe" "$payload/bin/ffprobe"
+docker rm "$ffmpeg_container" >/dev/null
+chmod 0755 "$payload/bin/ffmpeg" "$payload/bin/ffprobe"
+"$payload/bin/ffmpeg" -version | grep -Fq "ffmpeg version ${ffmpeg_version}"
+"$payload/bin/ffprobe" -version | grep -Fq "ffprobe version ${ffmpeg_version}"
+
 uv_version="0.12.13"
 if [ "$resource_arch" = aarch64 ]; then
   uv_sha256="2eaa5d94f5db7b3a1a092156b9420459e42ab0217d917fe74a876309cef9b5e9"
@@ -111,6 +133,7 @@ MoviePilot-Frontend.version=${frontend}
 MoviePilot-Plugins.branch=v3
 MoviePilot-Plugins.commit=${plugins_commit}
 MoviePilot-Resources.commit=${resources_commit}
+ffmpeg.version=${ffmpeg_version}
 uv.version=${uv_version}
 EOF
 
