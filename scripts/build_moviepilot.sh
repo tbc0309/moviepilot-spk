@@ -80,6 +80,8 @@ docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux2014_${r
   cd /tmp/postgresql-source
   ./configure --prefix=/opt/libpq --without-readline --without-zlib
   make -C src/include -j2 install
+  make -C src/port -j2 install
+  make -C src/common -j2 install
   make -C src/interfaces/libpq -j2 install
   make -C src/bin/pg_config -j2 install
   cd /work/source
@@ -87,6 +89,7 @@ docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux2014_${r
     | tar -xz -C /tmp/psycopg-source --strip-components=1
   sed -i "s|^pg_config =.*$|pg_config = /opt/libpq/bin/pg_config|" /tmp/psycopg-source/setup.cfg
   sed -i "s/^static_libpq = 0$/static_libpq = 1/" /tmp/psycopg-source/setup.cfg
+  sed -i "s/^libraries =.*$/libraries = pgcommon pgport/" /tmp/psycopg-source/setup.cfg
   /opt/python/cp314-cp314/bin/python -m pip wheel --no-deps \
     --wheel-dir /tmp/psycopg-wheel /tmp/psycopg-source
   auditwheel repair --wheel-dir /tmp/psycopg-repaired /tmp/psycopg-wheel/psycopg2-*.whl
