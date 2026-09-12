@@ -65,7 +65,7 @@ find "$payload/moviepilot/app/plugins" -mindepth 1 -maxdepth 1 -type d -printf '
   | LC_ALL=C sort > "$payload/moviepilot/app/plugins/.spk-bundled-plugins"
 
 docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux2014_${resource_arch}:latest" bash -euxc '
-  yum install -y libjpeg-turbo-devel postgresql-devel
+  yum install -y libjpeg-turbo-devel postgresql-devel postgresql-static
   curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
   source /root/.cargo/env
   /opt/python/cp314-cp314/bin/python -m pip install --disable-pip-version-check uv
@@ -73,12 +73,15 @@ docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux2014_${r
   UV_PROJECT_ENVIRONMENT=/work/venv /opt/python/cp314-cp314/bin/python -m uv sync \
     --locked --no-default-groups --group runtime-standard --no-install-project \
     --no-install-package psycopg2-binary
-  mkdir -p /tmp/psycopg-wheel /tmp/psycopg-repaired
+  mkdir -p /tmp/psycopg-source /tmp/psycopg-wheel /tmp/psycopg-repaired
+  curl -fsSL https://files.pythonhosted.org/packages/source/p/psycopg2/psycopg2-2.9.12.tar.gz \
+    | tar -xz -C /tmp/psycopg-source --strip-components=1
+  sed -i "s/^static_libpq = 0$/static_libpq = 1/" /tmp/psycopg-source/setup.cfg
   /opt/python/cp314-cp314/bin/python -m pip wheel --no-deps \
-    --wheel-dir /tmp/psycopg-wheel psycopg2-binary==2.9.12
-  auditwheel repair --wheel-dir /tmp/psycopg-repaired /tmp/psycopg-wheel/psycopg2_binary-*.whl
+    --wheel-dir /tmp/psycopg-wheel /tmp/psycopg-source
+  auditwheel repair --wheel-dir /tmp/psycopg-repaired /tmp/psycopg-wheel/psycopg2-*.whl
   /opt/python/cp314-cp314/bin/python -m uv pip install \
-    --python /work/venv/bin/python /tmp/psycopg-repaired/psycopg2_binary-*.whl
+    --python /work/venv/bin/python /tmp/psycopg-repaired/psycopg2-*.whl
   /work/venv/bin/python /work/source/app/doctor/dependencies.py --full
   /opt/python/cp314-cp314/bin/python -m uv pip install \
     --python /work/venv/bin/python --no-cache supervisor==4.3.0
