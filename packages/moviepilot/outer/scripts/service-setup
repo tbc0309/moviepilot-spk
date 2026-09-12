@@ -78,15 +78,28 @@ service_postupgrade() {
     # The new package keeps a clean copy of all bundled V3 plugins. Restore only
     # user-installed plugin directories so old bundled files cannot mix with new ones.
     if [ -d "${backup}" ]; then
+        restore_failed=0
         for plugin in "${backup}"/*; do
             [ -d "${plugin}" ] || continue
+            if [ -L "${plugin}" ]; then
+                echo "Skipping symbolic-link plugin backup: ${plugin}" 1>&2
+                continue
+            fi
             plugin_name=$(basename "${plugin}")
             if { [ -f "${old_manifest}" ] && grep -Fxq "${plugin_name}" "${old_manifest}"; } || \
                { [ -f "${new_manifest}" ] && grep -Fxq "${plugin_name}" "${new_manifest}"; }; then
                 continue
             fi
-            cp -a "${plugin}" "${plugins}/"
+            if ! cp -a "${plugin}" "${plugins}/"; then
+                echo "Failed to restore plugin backup: ${plugin_name}" 1>&2
+                restore_failed=1
+            fi
         done
-        $RM "${backup}"
+        if [ "${restore_failed}" -eq 0 ]; then
+            $RM "${backup}"
+        else
+            echo "Plugin backup was kept at ${backup}" 1>&2
+            return 1
+        fi
     fi
 }
