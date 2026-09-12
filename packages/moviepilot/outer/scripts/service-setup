@@ -7,24 +7,23 @@ if [ -z "${SYNOPKG_PKGNAME}" ] || [ -z "${SYNOPKG_DSM_VERSION_MAJOR}" ]; then
   exit 1
 fi
 
-PACKAGE_BASE="/var/packages/${SYNOPKG_PKGNAME}/target"
 USER="MoviePilot"
 EFF_USER="sc-MoviePilot"
-SVC_CWD="${PACKAGE_BASE}"
-export PATH="$PATH:${PACKAGE_BASE}/bin:/var/packages/Node.js_v22/target/usr/local/bin"
-export UV_BIN="${PACKAGE_BASE}/bin/uv"
-export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${PACKAGE_BASE}/lib"
-export PYTHONPATH="${PACKAGE_BASE}/moviepilot"
-export FRONTEND_PATH="${PACKAGE_BASE}/public"
-export CONFIG_DIR="${PACKAGE_BASE}/config"
-export TMP="${PACKAGE_BASE}/tmp"
+SVC_CWD="${SYNOPKG_PKGDEST}"
+export PATH="$PATH:${SYNOPKG_PKGDEST}/bin:/var/packages/Node.js_v22/target/usr/local/bin"
+export UV_BIN="${SYNOPKG_PKGDEST}/bin/uv"
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${SYNOPKG_PKGDEST}/lib"
+export PYTHONPATH="${SYNOPKG_PKGDEST}/moviepilot"
+export FRONTEND_PATH="${SYNOPKG_PKGDEST}/public"
+export CONFIG_DIR="${SYNOPKG_PKGDEST}/config"
+export TMP="${SYNOPKG_PKGDEST}/tmp"
 export NGINX_PORT="13000"
 export PORT="13001"
 export MOVIEPILOT_AUTO_UPDATE="false"
 export HOST="127.0.0.1"
 
 # start-stop-status script redirect stdout/stderr to LOG_FILE
-LOG_FILE="${PACKAGE_BASE}/logs/${SYNOPKG_PKGNAME}.log"
+LOG_FILE="${SYNOPKG_PKGDEST}/logs/${SYNOPKG_PKGNAME}.log"
 
 # Service command has to deliver its pid into PID_FILE
 PID_FILE="${SYNOPKG_PKGVAR}/${SYNOPKG_PKGNAME}.pid"
@@ -32,13 +31,13 @@ PID_FILE="${SYNOPKG_PKGVAR}/${SYNOPKG_PKGNAME}.pid"
 ### Package specific variables and functions
 ### ----------------------------------------
 
-SERVICE_COMMAND="${PACKAGE_BASE}/bin/supervisord -n -c ${PACKAGE_BASE}/supervisord.conf"
+SERVICE_COMMAND="${SYNOPKG_PKGDEST}/bin/supervisord -n -c ${SYNOPKG_PKGDEST}/supervisord.conf"
 SVC_BACKGROUND=y
 SVC_WRITE_PID=y
 
 link_config_folder() {
     persistent_config="${SYNOPKG_PKGVAR}/config"
-    package_config="${PACKAGE_BASE}/config"
+    package_config="${SYNOPKG_PKGDEST}/config"
 
     # Keep user configuration under @appdata and expose the historical target/config path.
     # Package defaults are copied only when the corresponding persistent file is absent.
@@ -62,15 +61,15 @@ service_preupgrade() {
     link_config_folder || return 1
     backup="${SYNOPKG_PKGVAR}/plugin-upgrade-backup"
     $RM "${backup}"
-    if [ -d "${PACKAGE_BASE}/moviepilot/app/plugins" ]; then
+    if [ -d "${SYNOPKG_PKGDEST}/moviepilot/app/plugins" ]; then
         mkdir -p "${backup}"
-        cp -a "${PACKAGE_BASE}/moviepilot/app/plugins/." "${backup}/"
+        cp -a "${SYNOPKG_PKGDEST}/moviepilot/app/plugins/." "${backup}/"
     fi
 }
 
 service_postupgrade() {
     backup="${SYNOPKG_PKGVAR}/plugin-upgrade-backup"
-    plugins="${PACKAGE_BASE}/moviepilot/app/plugins"
+    plugins="${SYNOPKG_PKGDEST}/moviepilot/app/plugins"
     old_manifest="${backup}/.spk-bundled-plugins"
     new_manifest="${plugins}/.spk-bundled-plugins"
 
