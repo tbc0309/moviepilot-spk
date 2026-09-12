@@ -44,12 +44,13 @@ if [ "$arch" = armv8 ]; then resource_arch=aarch64; else resource_arch=x86_64; f
 resource_dir="$work/resources/resources.v3"
 site_so="sites.cpython-314-${resource_arch}-linux-gnu.so"
 site_so_t="sites.cpython-314t-${resource_arch}-linux-gnu.so"
-for required in user.sites.v3.bin sites.pyi "$site_so" "$site_so_t"; do
+test -s "$site/sites.pyi" || { echo "MoviePilot source is missing app/application/site/sites.pyi" >&2; exit 1; }
+for required in user.sites.v3.bin "$site_so" "$site_so_t"; do
   test -s "$resource_dir/$required" || { echo "Missing required site resource: $required" >&2; exit 1; }
 done
 rm -f "$site"/sites*.so
-install -m 0644 "$resource_dir/user.sites.v3.bin" "$resource_dir/sites.pyi" \
-  "$resource_dir/$site_so" "$resource_dir/$site_so_t" "$site/"
+install -m 0644 "$resource_dir/user.sites.v3.bin" "$resource_dir/$site_so" \
+  "$resource_dir/$site_so_t" "$site/"
 if [ "$resource_arch" = aarch64 ]; then elf_machine='AArch64'; else elf_machine='Advanced Micro Devices X86-64'; fi
 for module in "$site/$site_so" "$site/$site_so_t"; do
   readelf -h "$module" | grep -Fq "$elf_machine" || { echo "Wrong ELF architecture: $module" >&2; exit 1; }
