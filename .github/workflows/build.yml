@@ -1,0 +1,87 @@
+name: Build package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package key
+        required: true
+        default: moviepilot
+        type: choice
+        options: [moviepilot]
+      version:
+        description: Upstream version; blank means latest
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ inputs.package }}-${{ inputs.version || 'latest' }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - id: version
+        env:
+          REQUESTED: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${REQUESTED}"
+          if [ -z "${version}" ]; then
+            version="$(gh api repos/jxxghp/MoviePilot/releases/latest --jq '.tag_name | ltrimstr("v")')"
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+  build:
+    needs: resolve
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: armv8
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build MoviePilot
+        run: bash scripts/build_moviepilot.sh "${{ needs.resolve.outputs.version }}" "${{ matrix.arch }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MoviePilot-${{ needs.resolve.outputs.version }}-${{ matrix.arch }}
+          path: dist/${{ matrix.arch }}/*
+          if-no-files-found: error
+
+  release:
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: MoviePilot-${{ needs.resolve.outputs.version }}-*
+          path: release
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          tag="moviepilot-v${VERSION}"
+          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${tag}" release/* --clobber --repo "${GITHUB_REPOSITORY}"
+          else
+            gh release create "${tag}" release/* \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "MoviePilot v${VERSION} for DSM 7.2" \
+              --notes "Automated build from jxxghp/MoviePilot v${VERSION}."
+          fi

@@ -1,0 +1,46 @@
+### Generic variables and functions
+### -------------------------------
+
+if [ -z "${SYNOPKG_PKGNAME}" ] || [ -z "${SYNOPKG_DSM_VERSION_MAJOR}" ]; then
+  echo "Error: Environment variables are not set." 1>&2;
+  echo "Please run me using synopkg instead. Example: \"synopkg start [packagename]\"" 1>&2;
+  exit 1
+fi
+
+PACKAGE_BASE="/var/packages/${SYNOPKG_PKGNAME}/target"
+CONFIG_FILE="${PACKAGE_BASE}/config/app.env"
+SVC_CWD="${PACKAGE_BASE}"
+export PATH="$PATH:${PACKAGE_BASE}/bin:/var/packages/Node.js_v22/target/usr/local/bin"
+export UV_BIN="${PACKAGE_BASE}/bin/uv"
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${PACKAGE_BASE}/lib"
+export PYTHONPATH="${PACKAGE_BASE}/moviepilot"
+export FRONTEND_PATH="${PACKAGE_BASE}/public"
+export CONFIG_DIR="${PACKAGE_BASE}/config"
+export TMP="${PACKAGE_BASE}/tmp"
+export NGINX_PORT="13000"
+export PORT="13001"
+export MOVIEPILOT_AUTO_UPDATE="false"
+export SUPERUSER_PASSWORD=admin
+
+# start-stop-status script redirect stdout/stderr to LOG_FILE
+LOG_FILE="${PACKAGE_BASE}/logs/${SYNOPKG_PKGNAME}.log"
+
+# Service command has to deliver its pid into PID_FILE
+PID_FILE="${SYNOPKG_PKGVAR}/${SYNOPKG_PKGNAME}.pid"
+
+### Package specific variables and functions
+### ----------------------------------------
+
+SERVICE_COMMAND[0]="${PACKAGE_BASE}/bin/supervisord -n -c ${PACKAGE_BASE}/supervisord.conf"
+SVC_BACKGROUND=y
+SVC_WRITE_PID=y
+
+service_preupgrade() {
+    $CP "${PACKAGE_BASE}/moviepilot/app/plugins" "${SYNOPKG_PKGVAR}/"
+}
+
+service_postupgrade() {
+    $CP "${PACKAGE_BASE}/moviepilot/app/plugins" "${SYNOPKG_PKGVAR}/"
+    $CP "${SYNOPKG_PKGVAR}/plugins" "${PACKAGE_BASE}/moviepilot/app/"
+    $RM "${SYNOPKG_PKGVAR}/plugins"
+}

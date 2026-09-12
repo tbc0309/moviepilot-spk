@@ -1,0 +1,41 @@
+name: Monitor upstream releases
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      updates: ${{ steps.check.outputs.updates }}
+      has_updates: ${{ steps.check.outputs.has_updates }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/check_updates.py
+
+  dispatch:
+    needs: check
+    if: needs.check.outputs.has_updates == 'true'
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.check.outputs.updates) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh workflow run build.yml
+          --repo "${GITHUB_REPOSITORY}"
+          -f package="${{ matrix.package }}"
+          -f version="${{ matrix.version }}"
+
