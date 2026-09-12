@@ -1,0 +1,34 @@
+name: 测试 DSM 7.1 SPK
+
+on:
+  push:
+    branches: [test/dsm71-node18]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: armv8
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: 测试构建 MoviePilot DSM 7.1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/build_moviepilot.sh "3.0.0" "${{ matrix.arch }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MoviePilot-DSM7.1-test-${{ matrix.arch }}
+          path: dist/${{ matrix.arch }}/*
+          if-no-files-found: error

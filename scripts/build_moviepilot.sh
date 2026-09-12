@@ -64,7 +64,7 @@ cp -a "$work/plugins/plugins.v3/." "$payload/moviepilot/app/plugins/"
 find "$payload/moviepilot/app/plugins" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' \
   | LC_ALL=C sort > "$payload/moviepilot/app/plugins/.spk-bundled-plugins"
 
-docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux_2_28_${resource_arch}:latest" bash -euxc '
+docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux_2_17_${resource_arch}:latest" bash -euxc '
   /opt/python/cp314-cp314/bin/python -m pip install --disable-pip-version-check uv
   UV_PROJECT_ENVIRONMENT=/work/venv /opt/python/cp314-cp314/bin/python -m uv sync \
     --locked --no-default-groups --group runtime-standard --no-install-project
@@ -130,7 +130,7 @@ python3 - "$outer/INFO" "$version" "$arch" <<'PY'
 import re, sys
 p, version, arch = sys.argv[1:]
 s = open(p, encoding="utf-8").read()
-values = {"version": version, "arch": "rtd1296 rtd1619b armada37xx armv8" if arch == "armv8" else "apollolake avoton braswell broadwell broadwellnk broadwellnkv2 broadwellntbap bromolow cedarview denverton epyc7002 geminilake geminilakenk grantley kvmx64 purley r1000 r1000nk v1000 v1000nk x86 x86_64", "install_dep_packages": "Node.js_v22:python314:ffmpeg8>=8.1.2-3", "changelog": f"更新MoviePilot到v{version}，使用Python 3.14、Node.js 22与FFmpeg 8。"}
+values = {"version": version, "arch": "rtd1296 rtd1619b armada37xx armv8" if arch == "armv8" else "apollolake avoton braswell broadwell broadwellnk broadwellnkv2 broadwellntbap bromolow cedarview denverton epyc7002 geminilake geminilakenk grantley kvmx64 purley r1000 r1000nk v1000 v1000nk x86 x86_64", "install_dep_packages": "Node.js_v18:python314:ffmpeg8>=8.1.2-3", "changelog": f"更新MoviePilot到v{version}，使用Python 3.14、Node.js 18与FFmpeg 8。"}
 for k, v in values.items():
     s, n = re.subn(rf'(?m)^{k}="[^"]*"', f'{k}="{v}"', s, count=1)
     if n != 1: raise SystemExit(f"INFO missing {k}")
@@ -140,7 +140,7 @@ find "$payload" -type d -exec chmod 755 '{}' +
 find "$payload" -mindepth 1 -maxdepth 1 -printf '%P\0' | sort -z > "$work/payload-files"
 tar --format=gnu --owner=0 --group=0 -czf "$outer/package.tgz" -C "$payload" \
   --null --files-from="$work/payload-files"
-output="$repo/dist/$arch/MoviePilot_v${version}_${arch}-Python3.14-DSM7.2.spk"
+output="$repo/dist/$arch/MoviePilot_v${version}_${arch}-Python3.14-DSM7.1-test.spk"
 find "$outer" -mindepth 1 -maxdepth 1 -printf '%P\0' | sort -z > "$work/outer-files"
 tar --format=gnu --owner=0 --group=0 -cf "$output" -C "$outer" \
   --null --files-from="$work/outer-files"
