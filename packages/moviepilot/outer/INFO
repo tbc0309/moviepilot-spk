@@ -1,6 +1,6 @@
 package="MoviePilot"
 version="3.0.0"
-description="MoviePilot NAS媒体库自动化管理工具。默认超级管理员用户名/密码：admin"
+description="MoviePilot NAS媒体库自动化管理工具。首次启动请在初始化页面设置管理员账号"
 arch="apollolake avoton braswell broadwell broadwellnk broadwellnkv2 broadwellntbap bromolow cedarview denverton epyc7002 geminilake geminilakenk grantley kvmx64 purley r1000 r1000nk v1000 v1000nk x86 x86_64"
 maintainer="jxxghp"
 maintainer_url="https://github.com/jxxghp/MoviePilot"
