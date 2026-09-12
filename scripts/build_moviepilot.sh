@@ -78,7 +78,7 @@ docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux2014_${r
   curl -fsSL https://ftp.postgresql.org/pub/source/v13.22/postgresql-13.22.tar.bz2 \
     | tar -xj -C /tmp/postgresql-source --strip-components=1
   cd /tmp/postgresql-source
-  ./configure --prefix=/opt/libpq --without-readline --without-zlib
+  CFLAGS=-fPIC ./configure --prefix=/opt/libpq --without-readline --without-zlib
   make -C src/include -j2 install
   make -C src/port -j2 install
   make -C src/common -j2 install
