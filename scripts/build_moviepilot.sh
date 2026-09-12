@@ -79,6 +79,7 @@ docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux2014_${r
     | tar -xj -C /tmp/postgresql-source --strip-components=1
   cd /tmp/postgresql-source
   ./configure --prefix=/opt/libpq --without-readline --without-zlib
+  make -C src/include -j2 install
   make -C src/interfaces/libpq -j2 install
   make -C src/bin/pg_config -j2 install
   cd /work/source
