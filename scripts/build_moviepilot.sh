@@ -64,14 +64,12 @@ cp -a "$work/plugins/plugins.v3/." "$payload/moviepilot/app/plugins/"
 find "$payload/moviepilot/app/plugins" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' \
   | LC_ALL=C sort > "$payload/moviepilot/app/plugins/.spk-bundled-plugins"
 
-docker run --rm -e SPK_RESOURCE_ARCH="$resource_arch" -v "$work:/work" -w /work/source "quay.io/pypa/manylinux2014_${resource_arch}:latest" bash -euxc '
+docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux2014_${resource_arch}:latest" bash -euxc '
   yum install -y libjpeg-turbo-devel postgresql-devel
   curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
   source /root/.cargo/env
   /opt/python/cp314-cp314/bin/python -m pip install --disable-pip-version-check uv
-  if [ "$SPK_RESOURCE_ARCH" = aarch64 ]; then
-    /opt/python/cp314-cp314/bin/python -m uv lock --upgrade-package numpy==2.4.2
-  fi
+  /opt/python/cp314-cp314/bin/python -m uv lock --upgrade-package numpy==2.4.2
   UV_PROJECT_ENVIRONMENT=/work/venv /opt/python/cp314-cp314/bin/python -m uv sync \
     --locked --no-default-groups --group runtime-standard --no-install-project
   /work/venv/bin/python /work/source/app/doctor/dependencies.py --full
