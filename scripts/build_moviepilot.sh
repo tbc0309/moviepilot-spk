@@ -105,17 +105,6 @@ if grep -IRn '/work/venv' "$payload/bin"; then
   exit 1
 fi
 
-# Match the static FFmpeg payload pinned by the official MoviePilot V3 image.
-ffmpeg_version="8.1.1"
-ffmpeg_image="mwader/static-ffmpeg:${ffmpeg_version}@sha256:735f84b905e00d5c618b667f0b053f83b1096f5fc404c607e6134bf2275a0e0a"
-ffmpeg_container="$(docker create "$ffmpeg_image")"
-docker cp "${ffmpeg_container}:/ffmpeg" "$payload/bin/ffmpeg"
-docker cp "${ffmpeg_container}:/ffprobe" "$payload/bin/ffprobe"
-docker rm "$ffmpeg_container" >/dev/null
-chmod 0755 "$payload/bin/ffmpeg" "$payload/bin/ffprobe"
-"$payload/bin/ffmpeg" -version | grep -Fq "ffmpeg version ${ffmpeg_version}"
-"$payload/bin/ffprobe" -version | grep -Fq "ffprobe version ${ffmpeg_version}"
-
 uv_version="0.12.13"
 if [ "$resource_arch" = aarch64 ]; then
   uv_sha256="2eaa5d94f5db7b3a1a092156b9420459e42ab0217d917fe74a876309cef9b5e9"
@@ -133,7 +122,7 @@ MoviePilot-Frontend.version=${frontend}
 MoviePilot-Plugins.branch=v3
 MoviePilot-Plugins.commit=${plugins_commit}
 MoviePilot-Resources.commit=${resources_commit}
-ffmpeg.version=${ffmpeg_version}
+ffmpeg.package=ffmpeg8>=8.1.2-3
 uv.version=${uv_version}
 EOF
 
@@ -141,7 +130,7 @@ python3 - "$outer/INFO" "$version" "$arch" <<'PY'
 import re, sys
 p, version, arch = sys.argv[1:]
 s = open(p, encoding="utf-8").read()
-values = {"version": version, "arch": "rtd1296 rtd1619b armada37xx armv8" if arch == "armv8" else "apollolake avoton braswell broadwell broadwellnk broadwellnkv2 broadwellntbap bromolow cedarview denverton epyc7002 geminilake geminilakenk grantley kvmx64 purley r1000 r1000nk v1000 v1000nk x86 x86_64", "install_dep_packages": "Node.js_v22:python314", "changelog": f"更新MoviePilot到v{version}，使用Python 3.14与Node.js 22。"}
+values = {"version": version, "arch": "rtd1296 rtd1619b armada37xx armv8" if arch == "armv8" else "apollolake avoton braswell broadwell broadwellnk broadwellnkv2 broadwellntbap bromolow cedarview denverton epyc7002 geminilake geminilakenk grantley kvmx64 purley r1000 r1000nk v1000 v1000nk x86 x86_64", "install_dep_packages": "Node.js_v22:python314:ffmpeg8>=8.1.2-3", "changelog": f"更新MoviePilot到v{version}，使用Python 3.14、Node.js 22与FFmpeg 8。"}
 for k, v in values.items():
     s, n = re.subn(rf'(?m)^{k}="[^"]*"', f'{k}="{v}"', s, count=1)
     if n != 1: raise SystemExit(f"INFO missing {k}")

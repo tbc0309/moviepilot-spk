@@ -10,7 +10,7 @@ fi
 USER="MoviePilot"
 EFF_USER="sc-MoviePilot"
 SVC_CWD="${SYNOPKG_PKGDEST}"
-export PATH="$PATH:${SYNOPKG_PKGDEST}/bin:/var/packages/Node.js_v22/target/usr/local/bin"
+export PATH="/var/packages/ffmpeg8/target/bin:$PATH:${SYNOPKG_PKGDEST}/bin:/var/packages/Node.js_v22/target/usr/local/bin"
 export UV_BIN="${SYNOPKG_PKGDEST}/bin/uv"
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${SYNOPKG_PKGDEST}/lib"
 export PYTHONPATH="${SYNOPKG_PKGDEST}/moviepilot"
