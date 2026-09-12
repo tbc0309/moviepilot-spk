@@ -1,6 +1,6 @@
 package="MoviePilot"
 version="3.0.0"
-description="MoviePilot NAS媒体库自动化管理工具"
+description="MoviePilot 新一代智能化个人媒体库管理工具，支持订阅、搜索、下载、整理和媒体库刷新。"
 arch="apollolake avoton braswell broadwell broadwellnk broadwellnkv2 broadwellntbap bromolow cedarview denverton epyc7002 geminilake geminilakenk grantley kvmx64 purley r1000 r1000nk v1000 v1000nk x86 x86_64"
 maintainer="jxxghp"
 maintainer_url="https://github.com/jxxghp/MoviePilot"
