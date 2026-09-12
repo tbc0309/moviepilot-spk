@@ -60,7 +60,21 @@ for k, v in values.items():
 open(p, "w", encoding="utf-8", newline="\n").write(s)
 PY
 find "$payload" -type d -exec chmod 755 '{}' +
-tar --format=gnu --owner=0 --group=0 -czf "$outer/package.tgz" -C "$payload" .
+find "$payload" -mindepth 1 -maxdepth 1 -printf '%P\0' | sort -z > "$work/payload-files"
+tar --format=gnu --owner=0 --group=0 -czf "$outer/package.tgz" -C "$payload" \
+  --null --files-from="$work/payload-files"
 output="$repo/dist/$arch/MoviePilot_v${version}_${arch}-Python3.14-DSM7.2.spk"
-tar --format=gnu --owner=0 --group=0 -cf "$output" -C "$outer" .
-tar -tf "$output" | grep -q package.tgz; sha256sum "$output" > "$output.sha256"; echo "Built $output"
+find "$outer" -mindepth 1 -maxdepth 1 -printf '%P\0' | sort -z > "$work/outer-files"
+tar --format=gnu --owner=0 --group=0 -cf "$output" -C "$outer" \
+  --null --files-from="$work/outer-files"
+if tar -tf "$outer/package.tgz" | grep -Eq '^(\./|\.$)'; then
+  echo "package.tgz contains an invalid dot-prefixed root" >&2
+  exit 1
+fi
+if tar -tf "$output" | grep -Eq '^(\./|\.$)'; then
+  echo "SPK contains an invalid dot-prefixed root" >&2
+  exit 1
+fi
+tar -tf "$output" | grep -qx package.tgz
+sha256sum "$output" > "$output.sha256"
+echo "Built $output"
