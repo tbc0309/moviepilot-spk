@@ -10,7 +10,14 @@ MoviePilot 群晖套件的自动更新与构建项目。仓库只保存 MoviePil
 - 构建成功后创建 GitHub Release，并附带 SPK 与 SHA256 文件。
 - 已发布的版本不会重复构建。
 
-上游项目：`jxxghp/MoviePilot`。
+## 官方项目链接
+
+- [MoviePilot 官网](https://movie-pilot.org/)
+- [MoviePilot 主程序](https://github.com/jxxghp/MoviePilot)
+- [MoviePilot Frontend](https://github.com/jxxghp/MoviePilot-Frontend)
+- [MoviePilot Plugins](https://github.com/jxxghp/MoviePilot-Plugins)
+- [MoviePilot Resources](https://github.com/jxxghp/MoviePilot-Resources)
+- [MoviePilot 官方 Wiki](https://wiki.movie-pilot.org/)
 
 ## 构建节点
 
