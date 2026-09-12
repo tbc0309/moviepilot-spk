@@ -65,7 +65,7 @@ find "$payload/moviepilot/app/plugins" -mindepth 1 -maxdepth 1 -type d -printf '
   | LC_ALL=C sort > "$payload/moviepilot/app/plugins/.spk-bundled-plugins"
 
 docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux2014_${resource_arch}:latest" bash -euxc '
-  yum install -y libjpeg-turbo-devel postgresql-devel postgresql-static
+  yum install -y libjpeg-turbo-devel
   curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
   source /root/.cargo/env
   /opt/python/cp314-cp314/bin/python -m pip install --disable-pip-version-check uv
@@ -74,13 +74,18 @@ docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux2014_${r
     --locked --no-default-groups --group runtime-standard --no-install-project \
     --no-install-package psycopg2-binary
   mkdir -p /tmp/psycopg-source /tmp/psycopg-wheel /tmp/psycopg-repaired
+  mkdir -p /tmp/postgresql-source
+  curl -fsSL https://ftp.postgresql.org/pub/source/v13.22/postgresql-13.22.tar.bz2 \
+    | tar -xj -C /tmp/postgresql-source --strip-components=1
+  cd /tmp/postgresql-source
+  ./configure --prefix=/opt/libpq --without-readline --without-zlib
+  make -C src/interfaces/libpq -j2 install
+  make -C src/bin/pg_config -j2 install
+  cd /work/source
   curl -fsSL https://files.pythonhosted.org/packages/source/p/psycopg2/psycopg2-2.9.12.tar.gz \
     | tar -xz -C /tmp/psycopg-source --strip-components=1
+  sed -i "s|^pg_config =.*$|pg_config = /opt/libpq/bin/pg_config|" /tmp/psycopg-source/setup.cfg
   sed -i "s/^static_libpq = 0$/static_libpq = 1/" /tmp/psycopg-source/setup.cfg
-  libpq_static="$(rpm -ql postgresql-static | grep "/libpq.a$" | head -n 1)"
-  test -s "$libpq_static"
-  mkdir -p /usr/lib64
-  if [ ! -e /usr/lib64/libpq.a ]; then ln -s "$libpq_static" /usr/lib64/libpq.a; fi
   /opt/python/cp314-cp314/bin/python -m pip wheel --no-deps \
     --wheel-dir /tmp/psycopg-wheel /tmp/psycopg-source
   auditwheel repair --wheel-dir /tmp/psycopg-repaired /tmp/psycopg-wheel/psycopg2-*.whl
