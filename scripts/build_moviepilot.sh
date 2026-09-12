@@ -64,7 +64,7 @@ cp -a "$work/plugins/plugins.v3/." "$payload/moviepilot/app/plugins/"
 find "$payload/moviepilot/app/plugins" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' \
   | LC_ALL=C sort > "$payload/moviepilot/app/plugins/.spk-bundled-plugins"
 
-docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux_2_17_${resource_arch}:latest" bash -euxc '
+docker run --rm -v "$work:/work" -w /work/source "quay.io/pypa/manylinux2014_${resource_arch}:latest" bash -euxc '
   /opt/python/cp314-cp314/bin/python -m pip install --disable-pip-version-check uv
   UV_PROJECT_ENVIRONMENT=/work/venv /opt/python/cp314-cp314/bin/python -m uv sync \
     --locked --no-default-groups --group runtime-standard --no-install-project
