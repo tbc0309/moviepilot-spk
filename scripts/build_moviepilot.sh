@@ -68,20 +68,22 @@ output="$repo/dist/$arch/MoviePilot_v${version}_${arch}-Python3.14-DSM7.2.spk"
 find "$outer" -mindepth 1 -maxdepth 1 -printf '%P\0' | sort -z > "$work/outer-files"
 tar --format=gnu --owner=0 --group=0 -cf "$output" -C "$outer" \
   --null --files-from="$work/outer-files"
-if tar -tf "$outer/package.tgz" | grep -Eq '^(\./|\.$)'; then
+tar -tf "$outer/package.tgz" > "$work/package-list"
+if grep -Eq '^(\./|\.$)' "$work/package-list"; then
   echo "package.tgz contains an invalid dot-prefixed root" >&2
   exit 1
 fi
-for required_dir in logs/ tmp/; do
-  if ! tar -tf "$outer/package.tgz" | grep -qx "${required_dir}"; then
+for required_dir in logs tmp; do
+  if ! grep -Eq "^${required_dir}/?$" "$work/package-list"; then
     echo "package.tgz is missing required directory: ${required_dir}" >&2
     exit 1
   fi
 done
-if tar -tf "$output" | grep -Eq '^(\./|\.$)'; then
+tar -tf "$output" > "$work/spk-list"
+if grep -Eq '^(\./|\.$)' "$work/spk-list"; then
   echo "SPK contains an invalid dot-prefixed root" >&2
   exit 1
 fi
-tar -tf "$output" | grep -qx package.tgz
+grep -qx package.tgz "$work/spk-list"
 sha256sum "$output" > "$output.sha256"
 echo "Built $output"
