@@ -1,0 +1,6 @@
+{
+  "systemd-unit": {},
+  "port-config": {
+    "protocol-file": "ui/MoviePilot.sc"
+  }
+}

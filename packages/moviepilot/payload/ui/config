@@ -1,0 +1,13 @@
+{
+    ".url": {
+        "SYNO.SDS.MoviePilot.Application": {
+            "title": "MoviePilot",
+            "desc": "MoviePilot Web UI",
+            "icon": "images/icon_{0}.png",
+            "type": "url",
+            "protocol": "http",
+            "port": "13000",
+            "allUsers": false
+        }
+    }
+}
