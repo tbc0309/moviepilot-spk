@@ -1,0 +1,159 @@
+name: MoviePilot｜群晖交叉编译并发布（主线）
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 上游版本，留空自动获取最新版
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cross-build-moviepilot-${{ inputs.version || 'latest' }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should_build: ${{ steps.version.outputs.should_build }}
+    steps:
+      - id: version
+        env:
+          REQUESTED: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${REQUESTED}"
+          [ -n "${version}" ] || version="$(gh api repos/jxxghp/MoviePilot/releases/latest --jq '.tag_name | ltrimstr("v")')"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          tag="moviepilot-v${version}"
+          if [ "${GITHUB_EVENT_NAME}" = schedule ] && gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "should_build=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "should_build=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+  cross:
+    needs: resolve
+    if: needs.resolve.outputs.should_build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            spksrc_arch: x64
+            dsm: '7.1'
+          - arch: armv8
+            spksrc_arch: rtd1296
+            dsm: '7.1'
+          - arch: x86_64
+            spksrc_arch: x64
+            dsm: '7.2'
+          - arch: armv8
+            spksrc_arch: rtd1619b
+            dsm: '7.2'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: 缓存 spksrc 工具链和编译结果
+        uses: actions/cache@v4
+        with:
+          path: .spksrc-cache
+          key: moviepilot-spksrc-${{ matrix.arch }}-DSM${{ matrix.dsm }}-v2
+          restore-keys: |
+            moviepilot-spksrc-${{ matrix.arch }}-DSM${{ matrix.dsm }}-
+      - name: 检测并交叉编译必要的原生 Python 依赖
+        run: bash scripts/test_python_crosscompile.sh "${{ matrix.spksrc_arch }}" "${{ matrix.dsm }}" "${{ needs.resolve.outputs.version }}"
+      - name: 保存交叉编译产物
+        uses: actions/upload-artifact@v5
+        with:
+          name: moviepilot-cross-wheel-${{ matrix.arch }}-DSM${{ matrix.dsm }}
+          path: cross-wheels-${{ matrix.dsm }}/
+          if-no-files-found: error
+
+  build:
+    needs: [resolve, cross]
+    if: needs.resolve.outputs.should_build == 'true' && needs.cross.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            dsm: '7.1'
+            runner: ubuntu-24.04
+            node: '18'
+          - arch: armv8
+            dsm: '7.1'
+            runner: ubuntu-24.04-arm
+            node: '18'
+          - arch: x86_64
+            dsm: '7.2'
+            runner: ubuntu-24.04
+            node: '22'
+          - arch: armv8
+            dsm: '7.2'
+            runner: ubuntu-24.04-arm
+            node: '22'
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: 下载对应架构交叉编译产物
+        uses: actions/download-artifact@v6
+        with:
+          name: moviepilot-cross-wheel-${{ matrix.arch }}-DSM${{ matrix.dsm }}
+          path: cross-wheels-${{ matrix.dsm }}
+      - name: 为 DSM 7.2 构建 PyAV 原生依赖
+        if: matrix.dsm == '7.2'
+        run: |
+          mkdir -p pyav-test native-plugin-wheels
+          resource_arch="${{ matrix.arch }}"
+          [ "${resource_arch}" = armv8 ] && resource_arch=aarch64
+          docker run --rm -v "$PWD:/repo:ro" -v "$PWD/pyav-test:/work" \
+            "quay.io/pypa/manylinux_2_28_${resource_arch}:latest" \
+            bash /repo/scripts/test_pyav.sh
+          cp pyav-test/pyav-report/av-12.3.0-*.whl native-plugin-wheels/
+      - name: 构建完整 SPK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/build_moviepilot.sh "${{ needs.resolve.outputs.version }}" "${{ matrix.arch }}" "${{ matrix.dsm }}"
+      - name: 保存完整 SPK
+        uses: actions/upload-artifact@v5
+        with:
+          name: moviepilot-spk-${{ matrix.arch }}-DSM${{ matrix.dsm }}
+          path: dist/${{ matrix.dsm }}/${{ matrix.arch }}/*.spk
+          if-no-files-found: error
+
+  release:
+    needs: [resolve, build]
+    if: needs.resolve.outputs.should_build == 'true' && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 下载全部 SPK
+        uses: actions/download-artifact@v6
+        with:
+          pattern: moviepilot-spk-*
+          path: release-assets
+          merge-multiple: true
+      - name: 重新创建正式 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          tag="moviepilot-v${VERSION}"
+          count="$(find release-assets -maxdepth 1 -type f -name '*.spk' | wc -l)"
+          [ "${count}" -eq 4 ] || { echo "SPK 数量异常：${count}/4"; exit 1; }
+          gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1 && \
+            gh release delete "${tag}" --yes --repo "${GITHUB_REPOSITORY}"
+          gh release create "${tag}" release-assets/*.spk --latest \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "MoviePilot v${VERSION} for DSM 7.1 / 7.2" \
+            --notes "基于群晖官方工具链交叉编译。DSM 7.1 使用 Node.js 18，DSM 7.2 使用 Node.js 22；均提供 x86_64、armv8 套件。"
