@@ -1,0 +1,106 @@
+name: MoviePilot｜Manylinux 构建（备用）
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package key
+        required: true
+        default: moviepilot
+        type: choice
+        options: [moviepilot]
+      version:
+        description: Upstream version; blank means latest
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-moviepilot-${{ inputs.version || 'latest' }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should_build: ${{ steps.version.outputs.should_build }}
+    steps:
+      - id: version
+        env:
+          REQUESTED: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${REQUESTED}"
+          if [ -z "${version}" ]; then
+            version="$(gh api repos/jxxghp/MoviePilot/releases/latest --jq '.tag_name | ltrimstr("v")')"
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+          tag="moviepilot-v${version}"
+          release_is_draft="$(gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" \
+            --json isDraft --jq '.isDraft' 2>/dev/null || true)"
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ] && [ "${release_is_draft}" = "false" ]; then
+            echo "should_build=false" >> "${GITHUB_OUTPUT}"
+            echo "MoviePilot v${version} 已发布，无需重复构建。"
+          else
+            echo "should_build=true" >> "${GITHUB_OUTPUT}"
+            echo "准备构建 MoviePilot v${version}。"
+          fi
+
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.should_build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            dsm: '7.1'
+            node: '18'
+          - arch: armv8
+            runner: ubuntu-24.04-arm
+            dsm: '7.1'
+            node: '18'
+          - arch: x86_64
+            runner: ubuntu-24.04
+            dsm: '7.2'
+            node: '22'
+          - arch: armv8
+            runner: ubuntu-24.04-arm
+            dsm: '7.2'
+            node: '22'
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check official plugin rule handling
+        run: python3 scripts/test_official_plugin_rules.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: 为 DSM 7.2 构建并验证 PyAV 原生依赖
+        if: matrix.dsm == '7.2'
+        run: |
+          mkdir -p pyav-test native-plugin-wheels
+          resource_arch="${{ matrix.arch }}"
+          [ "${resource_arch}" = "armv8" ] && resource_arch="aarch64"
+          docker run --rm -v "$PWD:/repo:ro" -v "$PWD/pyav-test:/work" \
+            "quay.io/pypa/manylinux_2_28_${resource_arch}:latest" \
+            bash /repo/scripts/test_pyav.sh
+          cp pyav-test/pyav-report/av-12.3.0-*.whl native-plugin-wheels/
+      - name: Build MoviePilot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/build_moviepilot.sh "${{ needs.resolve.outputs.version }}" "${{ matrix.arch }}" "${{ matrix.dsm }}"
+      - name: 输出插件依赖检查报告
+        if: matrix.dsm == '7.2'
+        run: find "reports/${{ matrix.dsm }}/${{ matrix.arch }}" -maxdepth 2 -type f -print -exec sed -n '1,240p' {} \;
+      - name: 保存备用构建 SPK
+        uses: actions/upload-artifact@v5
+        with:
+          name: moviepilot-manylinux-${{ matrix.arch }}-DSM${{ matrix.dsm }}
+          path: dist/${{ matrix.dsm }}/${{ matrix.arch }}/*.spk
+          if-no-files-found: error

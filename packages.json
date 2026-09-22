@@ -1,0 +1,9 @@
+{
+  "moviepilot": {
+    "enabled": true,
+    "upstream": "jxxghp/MoviePilot",
+    "workflow": "build.yml",
+    "architectures": ["x86_64", "armv8"],
+    "dsm": ["7.1", "7.2"]
+  }
+}
