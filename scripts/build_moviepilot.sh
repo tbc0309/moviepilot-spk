@@ -46,7 +46,8 @@ frontend="$(sed -n "s/^FRONTEND_VERSION[[:space:]]*=[[:space:]]*['\"]\([^'\"]*\)
 test -n "$frontend"
 download_release_asset jxxghp/MoviePilot-Frontend "$frontend" dist.zip "$work/dist.zip"
 unzip -q "$work/dist.zip" -d "$work/frontend"; mkdir -p "$payload/public"; cp -a "$work/frontend/dist/." "$payload/public/"
-(cd "$payload/public" && npm init -y >/dev/null && npm pkg set 'overrides.qs=6.16.0' && npm install --omit=dev --ignore-scripts --no-fund express@4.22.2 express-http-proxy@2.1.2 && npm audit --omit=dev --audit-level=moderate)
+# 固定到已修复拒绝服务漏洞的版本，保留中等级及以上漏洞阻断。
+(cd "$payload/public" && npm init -y >/dev/null && npm pkg set 'overrides.qs=6.16.1' && npm install --omit=dev --ignore-scripts --no-fund express@4.22.2 express-http-proxy@2.1.2 && npm audit --omit=dev --audit-level=moderate)
 
 curl -fsSL "https://codeload.github.com/jxxghp/MoviePilot-Resources/tar.gz/${resources_commit}" -o "$work/resources.tgz"
 mkdir "$work/resources"; tar -xzf "$work/resources.tgz" -C "$work/resources" --strip-components=1
