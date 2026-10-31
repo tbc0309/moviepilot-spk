@@ -181,11 +181,8 @@ docker run --rm --platform linux/amd64 -v "${work}:/spksrc" -w /spksrc \
 sudo chown -R "$(id -u):$(id -g)" "${work}"
 
 if [ "${tcversion}" = 7.1 ]; then
-  for library in libstdc++.so.6 libgcc_s.so.1; do
-    source="$(find "${work}" -type f \( -name "${library}" -o -name "${library}.*" \) -print -quit)"
-    [ -n "${source}" ] || { echo "Missing toolchain runtime ${library}" >&2; exit 1; }
-    cp -Lv "${source}" "${out}/${library}"
-  done
+  python3 "${GITHUB_WORKSPACE}/scripts/select_toolchain_runtime.py" \
+    "${work}/toolchain" "${out}" "${arch}"
 fi
 
 while IFS= read -r requirement; do
